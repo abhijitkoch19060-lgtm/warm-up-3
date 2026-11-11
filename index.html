@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Summit Weather | Live Weather, AQI & Climate Map</title>
+  <meta name="description" content="Live weather, air quality and a world map with a 20-year time machine." />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== BACKGROUND: mountain video (falls back to an animated mountain scene) ===== -->
+  <div class="video-bg" id="videoBg">
+    <canvas id="sceneCanvas"></canvas>
+    <video id="bgVideo" autoplay muted loop playsinline preload="auto">
+      <!-- Put your video at assets/mountain.mp4 (see README) -->
+      <source src="assets/mountain.mp4" type="video/mp4" />
+    </video>
+    <div class="video-overlay"></div>
+  </div>
+
+  <!-- ===== NAVBAR ===== -->
+  <header class="navbar">
+    <a href="#home" class="logo">⛰ Summit Weather</a>
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">☰</button>
+    <nav id="navLinks">
+      <a href="#home" data-link>Home</a>
+      <a href="#map" data-link>World Map</a>
+      <a href="#about" data-link>About Us</a>
+      <a href="#profile" data-link>Profile</a>
+      <a href="#login" data-link id="loginLink" class="btn-small">Login</a>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ===== HOME ===== -->
+    <section id="home" class="page">
+      <div class="hero">
+        <h1>Live Weather &amp; Air Quality</h1>
+        <p>Search any place on Earth for temperature, AQI and a 7-day forecast.</p>
+        <form id="searchForm" class="searchbar">
+          <input type="text" id="searchInput" placeholder="Search a city, e.g. Tokyo" autocomplete="off" />
+          <button type="submit" class="btn">Search</button>
+          <button type="button" class="btn btn-outline" id="homeLocate">📍 My location</button>
+        </form>
+        <p class="msg" id="searchMsg"></p>
+      </div>
+
+      <!-- CURRENT WEATHER PANEL -->
+      <div class="panel wide" id="weatherPanel">
+        <div class="wx-top">
+          <div>
+            <h2 id="wxPlace">Loading…</h2>
+            <p class="wx-time" id="wxTime"></p>
+            <div class="wx-temp"><span id="wxIcon">⛅</span><span id="wxTemp">--</span><span class="unit">°C</span></div>
+            <p id="wxDesc"></p>
+          </div>
+          <div class="wx-stats">
+            <div class="stat"><span>Feels like</span><b id="wxFeels">--</b></div>
+            <div class="stat"><span>Humidity</span><b id="wxHum">--</b></div>
+            <div class="stat"><span>Wind</span><b id="wxWind">--</b></div>
+            <div class="stat"><span>Rain now</span><b id="wxRain">--</b></div>
+          </div>
+          <div class="aqi-box" id="aqiBox">
+            <span class="aqi-label">Air Quality (US AQI)</span>
+            <div class="aqi-value" id="aqiValue">--</div>
+            <div class="aqi-cat" id="aqiCat">--</div>
+            <small id="aqiPm">PM2.5 -- · PM10 --</small>
+          </div>
+        </div>
+        <h3>7-Day Forecast</h3>
+        <div class="forecast" id="forecast"></div>
+      </div>
+
+      <!-- TEMPLATE CARDS: copy one <article class="card"> to add more -->
+      <div class="cards">
+        <article class="card">
+          <h3>🌍 World Map</h3>
+          <p>See live temperature and air quality for major cities around the globe.</p>
+          <a href="#map">Open the map →</a>
+        </article>
+        <article class="card">
+          <h3>⏳ Time Machine</h3>
+          <p>Slide back up to 20 years and see how the same day looked on the map.</p>
+          <a href="#map">Travel back →</a>
+        </article>
+        <article class="card">
+          <h3>📚 Data Source</h3>
+          <p>Weather, air quality and history come from the free Open-Meteo service.</p>
+          <a href="https://open-meteo.com" target="_blank" rel="noopener">open-meteo.com ↗</a>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== WORLD MAP ===== -->
+    <section id="map" class="page">
+      <div class="panel wide">
+        <h2>World Weather Map</h2>
+        <p>Pick a layer, click any city or any point on the map for details, and use the Time Machine to see past years.</p>
+
+        <form id="mapSearchForm" class="searchbar">
+          <input type="text" id="mapSearchInput" placeholder="Search a place and fly to it" autocomplete="off" />
+          <button type="submit" class="btn">Go</button>
+          <button type="button" class="btn btn-outline" id="locateBtn">📍 My location</button>
+        </form>
+
+        <div class="layer-toggle">
+          <label><input type="radio" name="layer" value="temp" checked /> 🌡 Temperature</label>
+          <label><input type="radio" name="layer" value="aqi" /> 😷 Air quality (live only)</label>
+        </div>
+
+        <div id="mapBox"></div>
+        <div class="legend" id="legend"></div>
+
+        <!-- TIME MACHINE -->
+        <div class="timebox" id="timeBox">
+          <div class="timehead">
+            <h3>⏳ Time Machine</h3>
+            <span id="timeLabel">Today (live reading)</span>
+          </div>
+          <input type="range" id="yearSlider" min="0" max="20" value="0" step="1" aria-label="Years ago" />
+          <div class="ticks"><span>Today</span><span>5 yrs ago</span><span>10</span><span>15</span><span>20 yrs ago</span></div>
+          <div class="timebtns">
+            <button type="button" class="btn" id="playBtn">▶ Play</button>
+            <span class="msg" id="mapMsg"></span>
+          </div>
+          <small class="note">Today shows the live reading. Past years show that calendar day's average temperature.</small>
+        </div>
+
+        <!-- 20-YEAR CHART FOR THE SELECTED POINT -->
+        <div class="chartbox" id="chartBox" hidden>
+          <h3 id="chartTitle"></h3>
+          <canvas id="histChart" width="900" height="300"></canvas>
+          <p class="note" id="chartNote"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ABOUT ===== -->
+    <section id="about" class="page">
+      <div class="panel">
+        <h2>About Us</h2>
+        <p>Summit Weather is a community project for people who love the outdoors and want clear, honest weather and air-quality information.</p>
+        <p>Edit this section in <code>index.html</code> to tell your own story.</p>
+
+        <div class="cards small">
+          <article class="card"><h3>Our Mission</h3><p>Make weather and climate data simple for everyone.</p></article>
+          <article class="card"><h3>Our Data</h3><p>Powered by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> and <a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a>.</p></article>
+          <article class="card"><h3>Contact</h3><p><a href="mailto:hello@example.com">hello@example.com</a></p></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== LOGIN ===== -->
+    <section id="login" class="page">
+      <div class="panel narrow">
+        <h2 id="authTitle">Login</h2>
+        <form id="authForm">
+          <label id="nameRow" hidden>Full name
+            <input type="text" id="nameInput" placeholder="Your name" />
+          </label>
+          <label>Email
+            <input type="email" id="emailInput" placeholder="you@example.com" required />
+          </label>
+          <label>Password
+            <input type="password" id="passInput" placeholder="Min 6 characters" minlength="6" required />
+          </label>
+          <button type="submit" class="btn" id="authSubmit">Login</button>
+          <p class="msg" id="authMsg"></p>
+        </form>
+        <p class="switch">
+          <span id="switchText">No account?</span>
+          <a href="#login" id="switchLink">Sign up</a>
+        </p>
+        <small class="note">Demo only: data is stored in your browser (localStorage). Connect a real backend for production.</small>
+      </div>
+    </section>
+
+    <!-- ===== PROFILE ===== -->
+    <section id="profile" class="page">
+      <div class="panel narrow">
+        <h2>Profile</h2>
+        <div id="profileLoggedOut">
+          <p>You are not logged in.</p>
+          <a href="#login" class="btn">Go to Login</a>
+        </div>
+        <div id="profileLoggedIn" hidden>
+          <div class="avatar" id="avatar">?</div>
+          <form id="profileForm">
+            <label>Name <input type="text" id="pName" required /></label>
+            <label>Email <input type="email" id="pEmail" disabled /></label>
+            <label>Home city (shown on the Home page)
+              <input type="text" id="pCity" placeholder="e.g. Paris" />
+            </label>
+            <label>Bio <textarea id="pBio" rows="3" placeholder="Tell us about yourself"></textarea></label>
+            <button type="submit" class="btn">Save changes</button>
+            <p class="msg" id="profileMsg"></p>
+          </form>
+          <button class="btn btn-outline" id="logoutBtn">Logout</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="footer-grid">
+      <div>
+        <h4>⛰ Summit Weather</h4>
+        <p>Watch the sky. Know the air.</p>
+      </div>
+      <div>
+        <h4>Quick Links</h4>
+        <a href="#home">Home</a>
+        <a href="#map">World Map</a>
+        <a href="#about">About Us</a>
+        <a href="#profile">Profile</a>
+      </div>
+      <div>
+        <h4>Data &amp; Credits</h4>
+        <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo (CC BY 4.0)</a>
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+        <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>
+      </div>
+      <div>
+        <h4>Follow</h4>
+        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://twitter.com" target="_blank" rel="noopener">Twitter / X</a>
+        <a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a>
+      </div>
+    </div>
+    <p class="copy">© <span id="year"></span> Summit Weather. All rights reserved.</p>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
